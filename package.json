@@ -1,0 +1,39 @@
+{
+  "name": "bsky-rewind",
+  "version": "1.0.0",
+  "description": "Mid-2010s Twitter-style personalized feed generator for Bluesky",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "publish-feed": "tsx scripts/publish.ts",
+    "preview": "tsx scripts/preview.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@atproto/api": "^0.20.25",
+    "@atproto/identity": "^0.5.3",
+    "@atproto/xrpc-server": "^0.11.6",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.22.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
