@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "publish-feed": "tsx scripts/publish.ts",
-    "preview": "tsx scripts/preview.ts"
+    "preview": "tsx scripts/preview.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "keywords": [],
   "author": "",

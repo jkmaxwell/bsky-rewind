@@ -48,44 +48,10 @@ if (totalPosts < 50_000) {
   console.warn(`⚠ small index — let \`npm run dev\` ingest for 15+ minutes for a meaningful preview`)
 }
 
-interface Hydrated {
-  handle: string
-  text: string
-  likes: number
-  replies: number
-}
-
-/** Hydrate skeleton URIs into readable posts via the public AppView. */
-async function hydrate(uris: string[]): Promise<Map<string, Hydrated>> {
-  const map = new Map<string, Hydrated>()
-  for (let i = 0; i < uris.length; i += 25) {
-    const params = new URLSearchParams()
-    for (const u of uris.slice(i, i + 25)) params.append('uris', u)
-    try {
-      const res = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?${params}`, {
-        signal: AbortSignal.timeout(15_000),
-      })
-      if (!res.ok) continue
-      const data: any = await res.json()
-      for (const p of data.posts ?? []) {
-        map.set(p.uri, {
-          handle: p.author?.handle ?? '?',
-          text: String(p.record?.text ?? '')
-            .replace(/\s+/g, ' ')
-            .slice(0, 100),
-          likes: p.likeCount ?? 0,
-          replies: p.replyCount ?? 0,
-        })
-      }
-    } catch {
-      // leave chunk unhydrated; URIs are printed as fallback
-    }
-  }
-  return map
-}
+import { hydratePosts } from '../src/appview.js'
 
 async function printPage(feed: { post: string; reason?: unknown }[], rankedCount: number): Promise<void> {
-  const posts = await hydrate(feed.map((i) => i.post))
+  const posts = await hydratePosts(feed.map((i) => i.post))
   feed.forEach((item, i) => {
     if (i === 0 && rankedCount > 0) console.log('── while you were away ─────────────────────')
     if (i === rankedCount && rankedCount > 0) console.log('── chronological ───────────────────────────')

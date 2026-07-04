@@ -1,6 +1,14 @@
 import type { Db } from './db.js'
 import type { ViewerStore, ViewerState } from './viewer.js'
-import { WEIGHTS, scorePost, burstScore, engagementRaw } from './scoring.js'
+import { WEIGHTS, scorePost, burstScore, engagementRaw, type PostSignals } from './scoring.js'
+
+export interface ScoredCandidate {
+  uri: string
+  author: string
+  createdAt: number
+  score: number
+  signals: PostSignals
+}
 
 export interface SkeletonItem {
   post: string
@@ -107,8 +115,11 @@ export class FeedAlgo {
     return { feed: items, cursor }
   }
 
-  /** Top-of-page-1 ranked highlights: in-network scored posts + MagicRecs bursts. */
-  private rankedBlock(viewer: ViewerState, now: number): SkeletonItem[] {
+  /**
+   * Score every in-network candidate exactly as the live ranker does.
+   * Public so offline evaluation (scripts/eval.ts) measures the real thing.
+   */
+  scoreCandidates(viewer: ViewerState, now: number): ScoredCandidate[] {
     const since = now - WEIGHTS.candidateWindowHours * 3600_000
     const followsJson = JSON.stringify(viewer.followsArr)
 
@@ -135,10 +146,9 @@ export class FeedAlgo {
       .all(followsJson, since) as { author: string; avg_eng: number }[]
     const baselineMap = new Map(baselines.map((b) => [b.author, b.avg_eng]))
 
-    const scored = candidates
-      .map((p) => ({
-        uri: p.uri,
-        score: scorePost({
+    return candidates
+      .map((p) => {
+        const signals: PostSignals = {
           likes: p.like_count,
           reposts: p.repost_count,
           replies: p.reply_count,
@@ -147,9 +157,15 @@ export class FeedAlgo {
           ageHours: (now - p.created_at) / 3600_000,
           authorAvgEngagement: baselineMap.get(p.author) ?? 0,
           viewerLikesOfAuthor: viewer.affinity[p.author] ?? 0,
-        }),
-      }))
+        }
+        return { uri: p.uri, author: p.author, createdAt: p.created_at, score: scorePost(signals), signals }
+      })
       .sort((a, b) => b.score - a.score)
+  }
+
+  /** Top-of-page-1 ranked highlights: in-network scored posts + MagicRecs bursts. */
+  private rankedBlock(viewer: ViewerState, now: number): SkeletonItem[] {
+    const scored = this.scoreCandidates(viewer, now)
 
     const bursts = this.magicRecs(viewer, now)
     const inNetworkSlots = WEIGHTS.rankedBlockSize - bursts.length
