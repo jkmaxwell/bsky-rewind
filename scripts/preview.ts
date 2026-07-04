@@ -48,19 +48,70 @@ if (totalPosts < 50_000) {
   console.warn(`⚠ small index — let \`npm run dev\` ingest for 15+ minutes for a meaningful preview`)
 }
 
+interface Hydrated {
+  handle: string
+  text: string
+  likes: number
+  replies: number
+}
+
+/** Hydrate skeleton URIs into readable posts via the public AppView. */
+async function hydrate(uris: string[]): Promise<Map<string, Hydrated>> {
+  const map = new Map<string, Hydrated>()
+  for (let i = 0; i < uris.length; i += 25) {
+    const params = new URLSearchParams()
+    for (const u of uris.slice(i, i + 25)) params.append('uris', u)
+    try {
+      const res = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?${params}`, {
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!res.ok) continue
+      const data: any = await res.json()
+      for (const p of data.posts ?? []) {
+        map.set(p.uri, {
+          handle: p.author?.handle ?? '?',
+          text: String(p.record?.text ?? '')
+            .replace(/\s+/g, ' ')
+            .slice(0, 100),
+          likes: p.likeCount ?? 0,
+          replies: p.replyCount ?? 0,
+        })
+      }
+    } catch {
+      // leave chunk unhydrated; URIs are printed as fallback
+    }
+  }
+  return map
+}
+
+async function printPage(feed: { post: string; reason?: unknown }[], rankedCount: number): Promise<void> {
+  const posts = await hydrate(feed.map((i) => i.post))
+  feed.forEach((item, i) => {
+    if (i === 0 && rankedCount > 0) console.log('── while you were away ─────────────────────')
+    if (i === rankedCount && rankedCount > 0) console.log('── chronological ───────────────────────────')
+    const p = posts.get(item.post)
+    const tag = item.reason ? 'RT ' : '   '
+    if (p) {
+      console.log(`${tag}@${p.handle} (${p.likes}♥ ${p.replies}💬) ${p.text}`)
+    } else {
+      console.log(`${tag}${item.post} (deleted or unhydratable)`)
+    }
+  })
+}
+
 console.time('page 1')
 const page1 = await algo.getSkeleton(did, limit)
 console.timeEnd('page 1')
 console.log(`\npage 1: ${page1.feed.length} items`)
-for (const item of page1.feed) {
-  console.log(` ${item.reason ? 'RT' : '  '} ${item.post}`)
-}
+const { WEIGHTS } = await import('../src/scoring.js')
+await printPage(page1.feed, Math.min(WEIGHTS.rankedBlockSize, page1.feed.length))
 
 if (page1.cursor) {
   console.time('page 2')
   const page2 = await algo.getSkeleton(did, limit, page1.cursor)
   console.timeEnd('page 2')
   console.log(`\npage 2: ${page2.feed.length} items, cursor=${page2.cursor ? 'yes' : 'end'}`)
+  await printPage(page2.feed, 0)
   const dupes = page2.feed.filter((i) => page1.feed.some((j) => j.post === i.post))
   console.log(`duplicates across pages: ${dupes.length}`)
 }
